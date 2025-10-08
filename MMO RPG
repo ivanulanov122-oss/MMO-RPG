@@ -1,0 +1,309 @@
+import random
+import math
+from enum import Enum
+
+class Rarity(Enum):
+    COMMON = 1
+    RARE = 2
+    EPIC = 3
+    LEGENDARY = 4
+    DIVINE = 5
+
+class PlayerClass(Enum):
+    SAMURAI = "samurai"
+    MAGE = "mage"
+    NECROMANCER = "necromancer"
+    ELF = "elf"
+
+class PhysicsBody:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.velocity_x = 0
+        self.velocity_y = 0
+        self.mass = 1.0
+        
+    def apply_force(self, force_x, force_y):
+        self.velocity_x += force_x / self.mass
+        self.velocity_y += force_y / self.mass
+        
+    def update(self):
+        self.x += self.velocity_x
+        self.y += self.velocity_y
+        self.velocity_x *= 0.9
+        self.velocity_y *= 0.9
+
+class Weapon:
+    def __init__(self, name, rarity, damage, is_creator=False):
+        self.name = name
+        self.rarity = rarity
+        self.damage = damage
+        self.durability = float('inf') if is_creator else 100
+        
+    def take_damage(self, amount):
+        if self.durability != float('inf'):
+            self.durability -= amount
+        return self.durability > 0
+
+class Armor:
+    def __init__(self, name, rarity, defense, is_creator=False):
+        self.name = name
+        self.rarity = rarity
+        self.defense = defense
+        self.durability = float('inf') if is_creator else 100
+        self.is_destroyed = False
+        
+    def take_hit(self, damage):
+        if self.is_destroyed:
+            return damage
+            
+        actual_damage = max(1, damage - self.defense)
+        
+        if self.durability != float('inf'):
+            self.durability -= actual_damage * 0.1
+            
+            if self.durability <= 0:
+                self.is_destroyed = True
+                print(f"💥 {self.name} была уничтожена!")
+                
+        return actual_damage
+
+class Player(PhysicsBody):
+    def __init__(self, name, player_class, is_creator=False):
+        super().__init__(random.uniform(0, 100), random.uniform(0, 100))
+        self.name = name
+        self.player_class = player_class
+        self.is_creator = is_creator
+        
+        # ХАРАКТЕРИСТИКИ (Создатель vs Обычный игрок)
+        if is_creator:
+            self.level = 1000
+            self.health = 1000000
+            self.max_health = 1000000
+            self.mana = 500000
+            self.max_mana = 500000
+            self.money = 1000000000
+            self.diamonds = 10000000
+        else:
+            self.level = random.randint(1, 50)
+            self.health = 100 + (self.level * 10)
+            self.max_health = self.health
+            self.mana = 100 + (self.level * 5)
+            self.max_mana = self.mana
+            self.money = random.randint(100, 5000)
+            self.diamonds = random.randint(10, 100)
+        
+        # СНАРЯЖЕНИЕ
+        if is_creator:
+            self.weapon = Weapon("⚡ КЛИНОК ВСЕВЫШНЕГО", Rarity.DIVINE, 999999, True)
+            self.armor = Armor("✨ БРОНЯ АБСОЛЮТА", Rarity.DIVINE, 999999, True)
+        else:
+            weapon_rarity = random.choice(list(Rarity)[:3])  # COMMON, RARE, EPIC
+            armor_rarity = random.choice(list(Rarity)[:3])
+            self.weapon = Weapon(f"Оружие {self.player_class.value}", weapon_rarity, 10 + (self.level * 2))
+            self.armor = Armor(f"Броня {self.player_class.value}", armor_rarity, 5 + self.level)
+        
+        # ВНЕШНОСТЬ
+        if is_creator:
+            self.appearance = {
+                "hair_style": "godlike",
+                "hair_color": "golden", 
+                "skin_color": "divine",
+                "height": 2.5,
+                "armor_style": "creator_god",
+                "aura": "golden_light"
+            }
+        else:
+            self.appearance = {
+                "hair_style": random.choice(["short", "long", "medium"]),
+                "hair_color": random.choice(["black", "brown", "blonde"]), 
+                "skin_color": "normal",
+                "height": round(random.uniform(1.6, 1.9), 1),
+                "armor_style": "basic",
+                "aura": "none"
+            }
+    
+    def attack(self, target):
+        if self.weapon.durability <= 0:
+            print("⚠️ Оружие сломалось!")
+            return False
+            
+        # РАСЧЕТ УРОНА
+        if self.is_creator:
+            base_damage = self.weapon.damage * 5  # Создатель всегда критует
+            print("💥 БОЖЕСТВЕННЫЙ КРИТИЧЕСКИЙ УДАР!")
+        else:
+            base_damage = self.weapon.damage * (self.level / 100)
+            crit_chance = 0.1 + (self.level * 0.001)
+            if random.random() < crit_chance:
+                base_damage *= 2
+                print("💥 Критический удар!")
+        
+        # ФИЗИКА АТАКИ
+        if self.is_creator:
+            force_x = random.uniform(-20, 20)
+            force_y = random.uniform(-20, 20)
+            self.apply_force(force_x * 0.1, force_y * 0.1)
+            target.apply_force(-force_x * 10, -force_y * 10)
+        else:
+            force_x = random.uniform(-5, 5)
+            force_y = random.uniform(-5, 5)
+            self.apply_force(force_x, force_y)
+            target.apply_force(-force_x * 2, -force_y * 2)
+        
+        actual_damage = target.take_damage(base_damage)
+        
+        # ИЗНОС ОРУЖИЯ (только для обычных игроков)
+        if not self.is_creator:
+            self.weapon.take_damage(1)
+        
+        print(f"⚔️ {self.name} атакует {target.name} и наносит {actual_damage:.1f} урона!")
+        return True
+    
+    def take_damage(self, damage):
+        # СОЗДАТЕЛЬ НЕУЯЗВИМ
+        if self.is_creator:
+            actual_damage = damage * 0.01
+        else:
+            actual_damage = self.armor.take_hit(damage)
+            
+        self.health -= actual_damage
+        
+        # ФИЗИКА ПОЛУЧЕНИЯ УРОНА
+        if not self.is_creator and actual_damage > 50:
+            knockback_x = random.uniform(-10, -5)
+            knockback_y = random.uniform(-2, 2)
+            self.apply_force(knockback_x, knockback_y)
+        
+        if self.health <= 0:
+            print(f"💀 {self.name} пал в бою!")
+            
+        return actual_damage
+    
+    def level_up(self):
+        if self.level < 1000:
+            self.level += 1
+            self.max_health += 20
+            self.health = self.max_health
+            self.max_mana += 10
+            self.mana = self.max_mana
+            print(f"🎉 {self.name} достиг уровня {self.level}!")
+    
+    def use_god_power(self):
+        if self.is_creator:
+            print(f"🌟 {self.name} использует силу создателя!")
+            self.health = self.max_health
+            self.mana = self.max_mana
+            print("❤️ Здоровье и мана восстановлены до максимума!")
+        else:
+            print("❌ Только создатель может использовать эту способность!")
+    
+    def change_appearance(self, **kwargs):
+        for key, value in kwargs.items():
+            if key in self.appearance:
+                self.appearance[key] = value
+        print(f"🎨 {self.name} изменил внешность: {self.appearance}")
+    
+    def display_status(self):
+        print(f"\n{'🌟' if self.is_creator else '👤'} {self.name} {'🌟' if self.is_creator else ''}")
+        print(f"⚔️ Класс: {self.player_class.value}")
+        print(f"📊 Уровень: {self.level}")
+        print(f"❤️ Здоровье: {self.health:.0f}/{self.max_health}")
+        print(f"🔮 Мана: {self.mana:.0f}")
+        print(f"💰 Деньги: {self.money if not self.is_creator else '∞'}")
+        print(f"💎 Алмазы: {self.diamonds if not self.is_creator else '∞'}")
+        print(f"⚔️ Оружие: {self.weapon.name} ({self.weapon.rarity.name})")
+        print(f"🛡️ Броня: {self.armor.name} ({self.armor.rarity.name})")
+        print(f"📍 Позиция: ({self.x:.1f}, {self.y:.1f})")
+
+class GameWorld:
+    def __init__(self):
+        self.players = []
+        self.creator = None
+        
+    def create_creator(self):
+        self.creator = Player("ВЛАСТЕЛИН", PlayerClass.SAMURAI, is_creator=True)
+        self.players.append(self.creator)
+        print("🌟 СОЗДАТЕЛЬ ПРИБЫЛ В МИР!")
+    
+    def create_normal_players(self, count=4):
+        classes = list(PlayerClass)
+        names = ["Арагорн", "Гэндальф", "Леголас", "Саруман", "Фродо", "Гимли"]
+        
+        for i in range(count):
+            player_class = random.choice(classes)
+            name = random.choice(names) + str(random.randint(1, 100))
+            player = Player(name, player_class, is_creator=False)
+            self.players.append(player)
+        
+        print(f"👥 Создано {count} обычных игроков")
+    
+    def battle_demo(self):
+        print("\n⚔️ ДЕМОНСТРАЦИЯ БОЯ: СОЗДАТЕЛЬ vs ИГРОКИ")
+        
+        normal_players = [p for p in self.players if not p.is_creator]
+        
+        for i, enemy in enumerate(normal_players[:2]):  # Бой с первыми двумя игроками
+            print(f"\n--- Бой {i+1}: {self.creator.name} vs {enemy.name} ---")
+            
+            # Показ начальных позиций
+            print(f"Создатель: ({self.creator.x:.1f}, {self.creator.y:.1f})")
+            print(f"Враг: ({enemy.x:.1f}, {enemy.y:.1f})")
+            
+            # Атака создателя
+            self.creator.attack(enemy)
+            
+            # Обновление физики
+            self.creator.update()
+            enemy.update()
+            
+            print(f"После атаки - Создатель: ({self.creator.x:.1f}, {self.creator.y:.1f})")
+            print(f"После атаки - Враг: ({enemy.x:.1f}, {enemy.y:.1f})")
+            
+            if enemy.health <= 0:
+                print(f"🎯 {enemy.name} повержен божественной силой!")
+    
+    def show_world_status(self):
+        print(f"\n🌍 СОСТОЯНИЕ МИРА")
+        print(f"Всего игроков: {len(self.players)}")
+        print(f"Создатель: {self.creator.name}")
+        
+        normal_players = [p for p in self.players if not p.is_creator]
+        print(f"Обычные игроки: {len(normal_players)}")
+        
+        # Статусы всех игроков
+        for player in self.players:
+            player.display_status()
+
+# ЗАПУСК ИГРЫ
+def main():
+    print("🎮 ЗАПУСК MMO RPG - МИР СОЗДАТЕЛЯ И СМЕРТНЫХ")
+    
+    # Создание мира
+    world = GameWorld()
+    
+    # Создание создателя (ТЕБЯ)
+    world.create_creator()
+    
+    # Создание обычных игроков
+    world.create_normal_players(4)
+    
+    # Демонстрация битвы
+    world.battle_demo()
+    
+    # Показать статусы всех
+    world.show_world_status()
+    
+    # Демонстрация способностей создателя
+    print(f"\n🌟 ДЕМОНСТРАЦИЯ СИЛ СОЗДАТЕЛЯ")
+    world.creator.use_god_power()
+    world.creator.change_appearance(
+        hair_style="cosmic",
+        hair_color="rainbow", 
+        aura="supernova"
+    )
+    
+    print(f"\n🎉 МИР ГОТОВ! Ты - ВЛАСТЕЛИН этого мира!")
+
+if __name__ == "__main__":
+    main()
